@@ -563,7 +563,7 @@ int main(void) {
       jni_make_string("Switch"),
       jni_make_string("nx"),
       jni_make_string("NVIDIA Tegra X1"));
-  implSetIsTVDevice(fake_env, NULL, 1);   // controller-first UI
+  implSetIsTVDevice(fake_env, NULL, 1);
   implSetHasVibrator(fake_env, NULL, 0);
   // setNoJoysticks = "set NUMBER of joysticks", not a boolean: stored as
   // joypadsConnected, which gates the analog-stick read path (count<1 -> stick

@@ -86,18 +86,6 @@ void *NVThreadGetCurrentJNIEnv(void) {
   return fake_env;
 }
 
-// overwrite a function's first instruction with RET in the RW load image
-// (must be called before so_finalize maps the segment RX). 0-safe if the
-// symbol is absent. Translates the runtime (virtbase) address back to the
-// writable load_base copy.
-static void ret_stub_rw(const char *sym) {
-  const uintptr_t vb = so_try_find_addr_rx(&game_mod, sym);
-  if (!vb)
-    return;
-  const uintptr_t lb = vb - (uintptr_t)game_mod.load_virtbase + (uintptr_t)game_mod.load_base;
-  *(uint32_t *)lb = 0xd65f03c0u; // RET
-}
-
 // ---------------------------------------------------------------------------
 // streaming thread fix
 //
