@@ -43,6 +43,7 @@ long pathconf_fake(const char *path, int name);
 int open_fake(const char *path, int flags, ...);
 int openat_fake(int dirfd, const char *path, int flags, ...);
 int unlinkat_fake(int dirfd, const char *path, int flags);
+int rename_fake(const char *src, const char *dst);
 struct bionic_stat;
 int stat_fake(const char *path, struct bionic_stat *st);
 int fstat_fake(int fd, struct bionic_stat *st);

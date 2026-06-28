@@ -1,0 +1,69 @@
+name: Build gtalcs_nx.nro
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version. Leave it empty to avoid publishing a release.'
+        required: false
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+      options: --user root
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install required Switch libraries
+        run: |
+          dkp-pacman -S --noconfirm --needed \
+            switch-mesa \
+            switch-libdrm_nouveau \
+            switch-sdl2 \
+            switch-mpg123 \
+            switch-ffmpeg \
+            switch-openal-soft
+
+      - name: Build
+        run: make
+        env:
+          DEVKITPRO: /opt/devkitpro
+          DEVKITA64: /opt/devkitpro/devkitA64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtalcs_nx
+          path: gtalcs_nx.nro
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.version != ''
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gtalcs_nx
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ inputs.version }}"
+          name: "gtalcs_nx v${{ inputs.version }}"
+          files: gtalcs_nx.nro
+          draft: false
+          prerelease: false

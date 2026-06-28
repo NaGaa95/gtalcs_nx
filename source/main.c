@@ -163,10 +163,10 @@ typedef struct {
 // Positional face buttons (Switch B = bottom = engine A confirm).
 // Minus is handled via onBackButtonPressed below, not as a button index.
 static const PadMap pad_map[] = {
-  { HidNpadButton_B, GPAD_BUTTON_A },
-  { HidNpadButton_A, GPAD_BUTTON_B },
-  { HidNpadButton_Y, GPAD_BUTTON_X },
-  { HidNpadButton_X, GPAD_BUTTON_Y },
+  { HidNpadButton_B, GPAD_BUTTON_B },
+  { HidNpadButton_A, GPAD_BUTTON_A },
+  { HidNpadButton_Y, GPAD_BUTTON_Y },
+  { HidNpadButton_X, GPAD_BUTTON_X },
   { HidNpadButton_L, GPAD_BUTTON_L1 },
   { HidNpadButton_R, GPAD_BUTTON_R1 },
   { HidNpadButton_ZL, GPAD_BUTTON_L2 },
