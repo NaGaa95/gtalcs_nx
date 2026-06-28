@@ -879,7 +879,7 @@ DynLibFunction dynlib_functions[] = {
   { "stat", (uintptr_t)&stat_fake },
   { "lstat", (uintptr_t)&lstat_fake },
   { "remove", (uintptr_t)&remove },
-  { "rename", (uintptr_t)&rename },
+  { "rename", (uintptr_t)&rename_fake },
   { "unlink", (uintptr_t)&unlink },
   { "unlinkat", (uintptr_t)&unlinkat_fake },
   { "truncate", (uintptr_t)&retm1 },

@@ -262,6 +262,20 @@ int unlinkat_fake(int dirfd, const char *path, int flags) {
   return unlink(path);
 }
 
+// On Switch fatfs, rename() over an existing destination fails with EEXIST.
+// The engine writes saves atomically: fopen(tmp) -> fwrite -> fclose ->
+// rename(tmp, dst). If rename fails, the engine retries every frame
+// indefinitely (the save screen freezes). Unlink the destination first so
+// rename always succeeds when the slot is being overwritten.
+int rename_fake(const char *src, const char *dst) {
+  int r = rename(src, dst);
+  if (r < 0 && (errno == EEXIST || errno == ENOTEMPTY)) {
+    unlink(dst);
+    r = rename(src, dst);
+  }
+  return r;
+}
+
 // fcntl with bionic->newlib flag translation for the netcode's F_SETFL.
 // command numbers (F_DUPFD=0..F_SETFL=4) match between bionic and newlib.
 int fcntl_fake(int fd, int cmd, ...) {
