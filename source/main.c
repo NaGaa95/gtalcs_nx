@@ -44,6 +44,7 @@ u32 __nx_nv_transfermem_size = 0x60000000; // 1.5 GB GPU memory pool
 extern void worldstream_probe(void);   // hooks/game.c (streaming watchdog)
 volatile int g_hide_saves = 0;         // libc_shim.c: New Game hides save slots
 int g_hide_saves_frames = 0;           // auto-clear countdown
+volatile float g_zoom_input = 0;       // hooks/game.c: d-pad up/down -> weapon zoom
 
 // provide replacement heap init function to separate newlib heap from the .so
 void __libnx_initheap(void) {
@@ -160,13 +161,28 @@ typedef struct {
   int button;
 } PadMap;
 
-// Positional face buttons (Switch B = bottom = engine A confirm).
-// Minus is handled via onBackButtonPressed below, not as a button index.
-static const PadMap pad_map[] = {
-  { HidNpadButton_B, GPAD_BUTTON_B },
+// Face buttons are the only part that differs between the two layouts (chosen by
+// config.xbox_layout):
+//   0 (default) "Nintendo": the Switch's labelled button drives the engine's
+//     same-letter button (Switch A -> engine A, ...), so the on-screen A/B/X/Y
+//     prompts match the physical Switch labels.
+//   1 "Xbox"/positional: match by physical position (Switch bottom B -> engine
+//     A, etc.) -- the original mapping, kept for players who prefer it.
+static const PadMap pad_face_nintendo[] = {
   { HidNpadButton_A, GPAD_BUTTON_A },
-  { HidNpadButton_Y, GPAD_BUTTON_Y },
+  { HidNpadButton_B, GPAD_BUTTON_B },
   { HidNpadButton_X, GPAD_BUTTON_X },
+  { HidNpadButton_Y, GPAD_BUTTON_Y },
+};
+static const PadMap pad_face_xbox[] = {
+  { HidNpadButton_B, GPAD_BUTTON_A },
+  { HidNpadButton_A, GPAD_BUTTON_B },
+  { HidNpadButton_Y, GPAD_BUTTON_X },
+  { HidNpadButton_X, GPAD_BUTTON_Y },
+};
+
+// shared across both layouts. Minus is handled via onBackButtonPressed below.
+static const PadMap pad_map[] = {
   { HidNpadButton_L, GPAD_BUTTON_L1 },
   { HidNpadButton_R, GPAD_BUTTON_R1 },
   { HidNpadButton_ZL, GPAD_BUTTON_L2 },
@@ -427,27 +443,42 @@ static void update_touch(void) {
 static PadState pad;
 static u64 pad_prev = 0;
 
+// drive one button table into the engine on the press/release edges
+static void send_pad_buttons(const PadMap *map, unsigned n, u64 down, u64 changed) {
+  for (unsigned i = 0; i < n; i++) {
+    if (!(changed & map[i].hid))
+      continue;
+    if (down & map[i].hid) {
+      implOnJoyButtonDown(fake_env, NULL, 0, map[i].button);
+      movie_skip(); // the game ignores input while waiting for a movie
+    } else {
+      implOnJoyButtonUp(fake_env, NULL, 0, map[i].button);
+    }
+  }
+}
+
 static void update_gamepad(void) {
   padUpdate(&pad);
   const u64 down = padGetButtons(&pad);
   const u64 changed = down ^ pad_prev;
 
-  for (unsigned int i = 0; i < sizeof(pad_map) / sizeof(*pad_map); i++) {
-    if (changed & pad_map[i].hid) {
-      if (down & pad_map[i].hid) {
-        implOnJoyButtonDown(fake_env, NULL, 0, pad_map[i].button);
-        movie_skip(); // the game ignores input while waiting for a movie
-      } else {
-        implOnJoyButtonUp(fake_env, NULL, 0, pad_map[i].button);
-      }
-    }
-  }
+  // face buttons follow the layout config; everything else is shared
+  send_pad_buttons(config.xbox_layout ? pad_face_xbox : pad_face_nintendo, 4, down, changed);
+  send_pad_buttons(pad_map, sizeof(pad_map) / sizeof(*pad_map), down, changed);
   // Minus -> the engine's back/pause handler, on the press edge
   if ((changed & HidNpadButton_Minus) && (down & HidNpadButton_Minus)) {
     implOnBackButtonPressed(fake_env, NULL);
     movie_skip();
   }
   pad_prev = down;
+
+  // Scoped-weapon zoom: the mobile engine only zooms via touch pinch, so a
+  // gamepad has no way to zoom (blocks the sniper mission). Drive the hooked
+  // GetPinchZoomDelta (hooks/game.c) from the d-pad up/down; only consumed by
+  // the engine while aiming a zoom weapon.
+  if (down & HidNpadButton_Up)        g_zoom_input = 0.5f;
+  else if (down & HidNpadButton_Down) g_zoom_input = -0.5f;
+  else                                g_zoom_input = 0.0f;
 
   const float scale = 1.f / 32767.0f;
   const HidAnalogStickState ls = padGetStickPos(&pad, 0);
@@ -484,9 +515,10 @@ int main(void) {
   setenv("mesa_glthread", "false", 1);
   setenv("GALLIUM_THREAD", "0", 1);
 
-  // read config, writing defaults if it's missing
-  if (read_config(CONFIG_NAME) < 0)
-    write_config(CONFIG_NAME);
+  // load config (defaults if absent), then write it back so newly-added keys
+  // like xbox_layout always show up in config.txt for editing
+  read_config(CONFIG_NAME);
+  write_config(CONFIG_NAME);
 
   check_syscalls();
   check_data();

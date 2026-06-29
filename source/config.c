@@ -17,7 +17,8 @@
   CONFIG_VAR_INT(screen_width); \
   CONFIG_VAR_INT(screen_height); \
   CONFIG_VAR_INT(trilinear_filter); \
-  CONFIG_VAR_INT(show_fps);
+  CONFIG_VAR_INT(show_fps); \
+  CONFIG_VAR_INT(xbox_layout);
 
 Config config;
 
@@ -43,6 +44,7 @@ int read_config(const char *file) {
   config.screen_height = -1;
   config.trilinear_filter = 1;
   config.show_fps = 0; // small FPS counter in the top left corner
+  config.xbox_layout = 0; // 0 = Nintendo face-button layout, 1 = legacy Xbox
 
   FILE *f = fopen(file, "r");
   if (f == NULL)

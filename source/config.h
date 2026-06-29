@@ -39,6 +39,7 @@ typedef struct {
   int screen_height;
   int trilinear_filter;
   int show_fps;
+  int xbox_layout;   // face buttons: 0 = Nintendo labels (default), 1 = legacy Xbox/positional
 } Config;
 
 extern Config config;

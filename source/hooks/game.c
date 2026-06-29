@@ -469,6 +469,17 @@ static void patch_world_stream(void) {
 // uses, which works).
 static int social_return_false(void) { return 0; }
 
+// Scoped-weapon zoom is only wired to touch pinch (Touchscreen::GetPinchZoomDelta,
+// read once by CCam::Process_M16_1stPerson), so a gamepad can't zoom -- which
+// blocks the early sniper mission. Return the real touch delta plus g_zoom_input
+// (main.c drives it from the d-pad up/down), adding a gamepad zoom control. The
+// engine only reads this while aiming a zoom weapon. Float global @ +0xa44214.
+extern volatile float g_zoom_input;   // main.c
+static float zoom_delta_hook(void) {
+  float touch = *(volatile float *)((char *)game_mod.load_virtbase + 0xa44214);
+  return touch + g_zoom_input;
+}
+
 void patch_game(void) {
   // route JNIEnv access and thread spawning through the fake environment
   // (identical mangling to CTW / Max Payne -- the NVThread layer is shared)
@@ -492,6 +503,12 @@ void patch_game(void) {
   if (so_try_find_addr_rx(&game_mod, "_ZN14SocialServices18IsNetworkReachableEv")) {
     hook_arm64(so_find_addr(&game_mod, "_ZN14SocialServices18IsNetworkReachableEv"), (uintptr_t)social_return_false);
     debugPrintf("SOCIAL: IsNetworkReachable forced false (offline -> local save/load)\n");
+  }
+
+  // add a gamepad weapon-zoom path (see zoom_delta_hook)
+  if (so_try_find_addr_rx(&game_mod, "_ZN11Touchscreen17GetPinchZoomDeltaEv")) {
+    hook_arm64(so_find_addr(&game_mod, "_ZN11Touchscreen17GetPinchZoomDeltaEv"), (uintptr_t)zoom_delta_hook);
+    debugPrintf("ZOOM: gamepad weapon zoom enabled (d-pad up/down)\n");
   }
 
   // CFerry::UpdateFerrys reads [pool+40], but on a new game the sim ticks before
