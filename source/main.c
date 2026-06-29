@@ -45,6 +45,7 @@ extern void worldstream_probe(void);   // hooks/game.c (streaming watchdog)
 volatile int g_hide_saves = 0;         // libc_shim.c: New Game hides save slots
 int g_hide_saves_frames = 0;           // auto-clear countdown
 volatile float g_zoom_input = 0;       // hooks/game.c: d-pad up/down -> weapon zoom
+volatile int g_freeaim_combo = 0;      // hooks/game.c: R + D-pad Down -> free-aim toggle
 
 // provide replacement heap init function to separate newlib heap from the .so
 void __libnx_initheap(void) {
@@ -479,6 +480,11 @@ static void update_gamepad(void) {
   if (down & HidNpadButton_Up)        g_zoom_input = 0.5f;
   else if (down & HidNpadButton_Down) g_zoom_input = -0.5f;
   else                                g_zoom_input = 0.0f;
+
+  // R + D-pad Down = toggle free aim. The engine's gamepad combo detection
+  // (CPad::EnterFreeAim) doesn't fire on our input, so detect it directly and
+  // feed it to the EnterFreeAim hook (hooks/game.c).
+  g_freeaim_combo = (down & HidNpadButton_R) && (down & HidNpadButton_Down);
 
   const float scale = 1.f / 32767.0f;
   const HidAnalogStickState ls = padGetStickPos(&pad, 0);

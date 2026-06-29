@@ -480,6 +480,25 @@ static float zoom_delta_hook(void) {
   return touch + g_zoom_input;
 }
 
+// Free-aim toggle. CPad::EnterFreeAim (polled by CPlayerPed::ProcessPlayerWeapon)
+// detects the R + D-pad Down combo by reading CControllerState action fields, but
+// our gamepad input doesn't populate them the way the Android build expects, so
+// R+Down never toggles free aim. Detect the combo directly from our pad state
+// (g_freeaim_combo); otherwise fall back to a faithful reimplementation of the
+// original field checks (@158<=3 && @14 && @20|@28, the offset chosen by the
+// controller-config byte at *(load_virtbase+0x7f9000+3032)).
+extern volatile int g_freeaim_combo;   // main.c: R + D-pad Down held
+static int enter_free_aim_hook(void *cpad) {
+  if (g_freeaim_combo)
+    return 1;
+  const uint8_t *p = cpad;
+  if (*(const uint16_t *)(p + 158) > 3) return 0;
+  if (*(const uint16_t *)(p + 14) == 0) return 0;
+  const uint8_t *pref = *(uint8_t **)((char *)game_mod.load_virtbase + 0x7f9000 + 3032);
+  const int off = (pref && *pref == 0) ? 20 : 28;
+  return *(const uint16_t *)(p + off) != 0;
+}
+
 void patch_game(void) {
   // route JNIEnv access and thread spawning through the fake environment
   // (identical mangling to CTW / Max Payne -- the NVThread layer is shared)
@@ -509,6 +528,12 @@ void patch_game(void) {
   if (so_try_find_addr_rx(&game_mod, "_ZN11Touchscreen17GetPinchZoomDeltaEv")) {
     hook_arm64(so_find_addr(&game_mod, "_ZN11Touchscreen17GetPinchZoomDeltaEv"), (uintptr_t)zoom_delta_hook);
     debugPrintf("ZOOM: gamepad weapon zoom enabled (d-pad up/down)\n");
+  }
+
+  // detect the R + D-pad Down free-aim combo from our pad state (see enter_free_aim_hook)
+  if (so_try_find_addr_rx(&game_mod, "_ZN4CPad12EnterFreeAimEv")) {
+    hook_arm64(so_find_addr(&game_mod, "_ZN4CPad12EnterFreeAimEv"), (uintptr_t)enter_free_aim_hook);
+    debugPrintf("FREEAIM: R + D-pad Down combo enabled\n");
   }
 
   // CFerry::UpdateFerrys reads [pool+40], but on a new game the sim ticks before
