@@ -37,6 +37,7 @@ first run the game:
 * `screen_width` / `screen_height` — render resolution; `-1` picks 1280x720 in handheld and 1920x1080 docked
 * `trilinear_filter` — `1` forces trilinear texture filtering
 * `show_fps` — `1` draws a small FPS counter in the top left corner
+* `xbox_layout` — `1` original Xbox layout
 
 ### How to build
 
