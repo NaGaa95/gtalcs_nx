@@ -469,16 +469,15 @@ static void patch_world_stream(void) {
 // uses, which works).
 static int social_return_false(void) { return 0; }
 
-// Scoped-weapon zoom is only wired to touch pinch (Touchscreen::GetPinchZoomDelta,
-// read once by CCam::Process_M16_1stPerson), so a gamepad can't zoom -- which
-// blocks the early sniper mission. Return the real touch delta plus g_zoom_input
-// (main.c drives it from the d-pad up/down), adding a gamepad zoom control. The
-// engine only reads this while aiming a zoom weapon. Float global @ +0xa44214.
-extern volatile float g_zoom_input;   // main.c
-static float zoom_delta_hook(void) {
-  float touch = *(volatile float *)((char *)game_mod.load_virtbase + 0xa44214);
-  return touch + g_zoom_input;
-}
+// Scoped-weapon/camera zoom. CPad::SniperZoomIn/Out (the gamepad zoom, polled by
+// CCam::Process_M16_1stPerson for the sniper and by the camera mission script)
+// read CControllerState action fields our input doesn't populate, so d-pad
+// zoom is dead -- which blocks the sniper mission and Snappy Dresser's camera.
+// Drive them from our d-pad up/down (g_zoom_dir) instead. These are only polled
+// while aiming a zoom weapon / using the camera, so no other-context effect.
+extern volatile int g_zoom_dir;   // main.c: +1 = d-pad up (in), -1 = down (out)
+static int sniper_zoom_in_hook(void *cpad)  { (void)cpad; return g_zoom_dir > 0; }
+static int sniper_zoom_out_hook(void *cpad) { (void)cpad; return g_zoom_dir < 0; }
 
 // Free-aim toggle. CPad::EnterFreeAim (polled by CPlayerPed::ProcessPlayerWeapon)
 // detects the R + D-pad Down combo by reading CControllerState action fields, but
@@ -524,10 +523,12 @@ void patch_game(void) {
     debugPrintf("SOCIAL: IsNetworkReachable forced false (offline -> local save/load)\n");
   }
 
-  // add a gamepad weapon-zoom path (see zoom_delta_hook)
-  if (so_try_find_addr_rx(&game_mod, "_ZN11Touchscreen17GetPinchZoomDeltaEv")) {
-    hook_arm64(so_find_addr(&game_mod, "_ZN11Touchscreen17GetPinchZoomDeltaEv"), (uintptr_t)zoom_delta_hook);
-    debugPrintf("ZOOM: gamepad weapon zoom enabled (d-pad up/down)\n");
+  // gamepad zoom for scoped weapons + the camera (see sniper_zoom_*_hook)
+  if (so_try_find_addr_rx(&game_mod, "_ZN4CPad12SniperZoomInEv") &&
+      so_try_find_addr_rx(&game_mod, "_ZN4CPad13SniperZoomOutEv")) {
+    hook_arm64(so_find_addr(&game_mod, "_ZN4CPad12SniperZoomInEv"), (uintptr_t)sniper_zoom_in_hook);
+    hook_arm64(so_find_addr(&game_mod, "_ZN4CPad13SniperZoomOutEv"), (uintptr_t)sniper_zoom_out_hook);
+    debugPrintf("ZOOM: gamepad sniper/camera zoom enabled (d-pad up/down)\n");
   }
 
   // detect the R + D-pad Down free-aim combo from our pad state (see enter_free_aim_hook)

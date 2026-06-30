@@ -44,7 +44,7 @@ u32 __nx_nv_transfermem_size = 0x60000000; // 1.5 GB GPU memory pool
 extern void worldstream_probe(void);   // hooks/game.c (streaming watchdog)
 volatile int g_hide_saves = 0;         // libc_shim.c: New Game hides save slots
 int g_hide_saves_frames = 0;           // auto-clear countdown
-volatile float g_zoom_input = 0;       // hooks/game.c: d-pad up/down -> weapon zoom
+volatile int g_zoom_dir = 0;           // hooks/game.c: d-pad up=+1/down=-1 -> sniper/camera zoom
 volatile int g_freeaim_combo = 0;      // hooks/game.c: R + D-pad Down -> free-aim toggle
 
 // provide replacement heap init function to separate newlib heap from the .so
@@ -473,13 +473,12 @@ static void update_gamepad(void) {
   }
   pad_prev = down;
 
-  // Scoped-weapon zoom: the mobile engine only zooms via touch pinch, so a
-  // gamepad has no way to zoom (blocks the sniper mission). Drive the hooked
-  // GetPinchZoomDelta (hooks/game.c) from the d-pad up/down; only consumed by
-  // the engine while aiming a zoom weapon.
-  if (down & HidNpadButton_Up)        g_zoom_input = 0.5f;
-  else if (down & HidNpadButton_Down) g_zoom_input = -0.5f;
-  else                                g_zoom_input = 0.0f;
+  // D-pad up/down = zoom in/out for scoped weapons (sniper) and the camera. The
+  // engine's gamepad zoom (CPad::SniperZoomIn/Out) reads action fields our input
+  // doesn't populate, so feed the direction to those hooks in hooks/game.c.
+  if (down & HidNpadButton_Up)        g_zoom_dir = 1;
+  else if (down & HidNpadButton_Down) g_zoom_dir = -1;
+  else                                g_zoom_dir = 0;
 
   // R + D-pad Down = toggle free aim. The engine's gamepad combo detection
   // (CPad::EnterFreeAim) doesn't fire on our input, so detect it directly and
